@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Source Separation & Classification | Technical Report</title>
+    
+    <!-- MathJax for LaTeX Rendering -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Mermaid JS for UML -->
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ 
+            startOnLoad: true, 
+            theme: 'dark', 
+            securityLevel: 'loose',
+            flowchart: { curve: 'basis' }
+        });
+    </script>
+
+    <style>
+        :root {
+            --bg-color: #0b0c15;
+            --surface-color: #151923;
+            --surface-hover: #1e2330;
+            --border-color: rgba(255, 255, 255, 0.08);
+            
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            
+            --accent-cyan: #22d3ee;
+            --accent-purple: #a855f7;
+            --accent-glow: rgba(34, 211, 238, 0.15);
+            --accent-success: #10b981;
+            --accent-error: #ef4444;
+            
+            --sidebar-width: 280px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            scrollbar-width: thin;
+            scrollbar-color: var(--surface-hover) var(--bg-color);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* --- Sidebar Navigation --- */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: rgba(21, 25, 35, 0.8);
+            backdrop-filter: blur(12px);
+            border-right: 1px solid var(--border-color);
+            height: 100vh;
+            position: fixed;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+        }
+
+        .brand {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 3rem;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .brand-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--accent-cyan);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--accent-cyan);
+        }
+
+        .nav-menu {
+            list-style: none;
+            flex-grow: 1;
+        }
+
+        .nav-item {
+            margin-bottom: 0.5rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 1rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 0.5rem;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background: var(--surface-hover);
+            color: var(--text-primary);
+            transform: translateX(4px);
+        }
+
+        .nav-link.active {
+            background: var(--accent-glow);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(34, 211, 238, 0.2);
+        }
+
+        .nav-link i {
+            width: 1.25rem;
+            text-align: center;
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            pt: 2rem;
+            border-top: 1px solid var(--border-color);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* --- Main Content --- */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            flex-grow: 1;
+            padding: 4rem 6rem;
+            max-width: 1600px;
+        }
+
+        /* Header */
+        header {
+            margin-bottom: 5rem;
+            position: relative;
+        }
+
+        .doc-meta {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 1rem;
+            display: flex;
+            gap: 2rem;
+        }
+
+        h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 4rem;
+            line-height: 1.1;
+            font-weight: 700;
+            background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.03em;
+        }
+
+        .subtitle {
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+            font-weight: 300;
+            max-width: 800px;
+            line-height: 1.5;
+        }
+
+        /* Glass Cards */
+        .glass-card {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
+            padding: 2.5rem;
+            margin-bottom: 3rem;
+            backdrop-filter: blur(10px);
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent-cyan);
+        }
+
+        .glass-card.highlight {
+            border-left: 4px solid var(--accent-purple);
+        }
+
+        /* Typography */
+        h2 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2.25rem;
+            color: var(--text-primary);
+            margin: 4rem 0 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        h2::before {
+            content: '#';
+            color: var(--accent-cyan);
+            font-family: 'Space Grotesk', sans-serif;
+            opacity: 0.5;
+        }
+
+        h3 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.5rem;
+            color: var(--text-primary);
+            margin: 2.5rem 0 1rem;
+        }
+
+        p {
+            margin-bottom: 1.5rem;
+            color: var(--text-secondary);
+            font-size: 1.05rem;
+            max-width: 80ch;
+        }
+
+        /* Tables */
+        .table-container {
+            width: 100%;
+            overflow-x: auto;
+            margin: 2rem 0;
+            border-radius: 0.75rem;
+            border: 1px solid var(--border-color);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+
+        th {
+            background: var(--surface-hover);
+            color: var(--text-primary);
+            font-weight: 600;
+            text-align: left;
+            padding: 1rem 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        tr:hover td {
+            background: rgba(255,255,255,0.02);
+        }
+
+        /* Code Blocks */
+        pre {
+            background: #0d1117;
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            overflow-x: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            position: relative;
+        }
+
+        pre::after {
+            content: "PYTHON";
+            position: absolute;
+            top: 0.75rem;
+            right: 1rem;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            opacity: 0.5;
+        }
+
+        code { color: #c9d1d9; }
+        .kw { color: #ff7b72; } /* Keyword */
+        .cls { color: #d2a8ff; } /* Class */
+        .fn { color: #79c0ff; } /* Function */
+        .str { color: #a5d6ff; } /* String */
+        .com { color: #8b949e; font-style: italic; } /* Comment */
+
+        /* Math Blocks */
+        .math-block {
+            background: var(--surface-color);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            margin: 2rem 0;
+            border-left: 2px solid var(--accent-cyan);
+            overflow-x: auto;
+            color: var(--text-primary);
+        }
+
+        /* Images */
+        .figure {
+            margin: 4rem 0;
+        }
+
+        .img-container {
+            width: 100%;
+            border-radius: 0.75rem;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px; /* Placeholder height */
+        }
+
+        .img-container img {
+            width: 100%;
+            height: auto;
+            display: block;
+            object-fit: contain;
+        }
+
+        .caption {
+            margin-top: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-align: center;
+        }
+        
+        .caption strong {
+            color: var(--accent-cyan);
+        }
+
+        /* Lists */
+        ul {
+            list-style: none;
+            margin-bottom: 2rem;
+        }
+
+        ul li {
+            padding-left: 1.5rem;
+            position: relative;
+            margin-bottom: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        ul li::before {
+            content: '>';
+            position: absolute;
+            left: 0;
+            color: var(--accent-purple);
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+        }
+
+        /* --- Detailed Loss Explanation Styles --- */
+        .loss-explanation {
+            margin-top: 2rem;
+            padding: 2rem;
+            background: linear-gradient(145deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.01) 100%);
+            border-radius: 1rem;
+            border: 1px solid var(--border-color);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .loss-explanation::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 4px; height: 100%;
+            background: var(--accent-cyan);
+        }
+
+        .loss-explanation h4 {
+            font-family: 'Space Grotesk', sans-serif;
+            color: var(--text-primary);
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* --- Sophisticated Visual Diagrams --- */
+        .viz-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 3rem 0;
+            padding: 2rem;
+            background: #0d1117;
+            border-radius: 1rem;
+            border: 1px dashed var(--text-muted);
+            position: relative;
+            flex-wrap: wrap;
+            gap: 3rem;
+        }
+
+        /* CE Pipeline */
+        .ce-pipeline {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .ce-box {
+            background: var(--surface-hover);
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            border: 1px solid var(--border-color);
+            position: relative;
+            min-width: 100px;
+        }
+        
+        .ce-box::after {
+            content: attr(data-label);
+            position: absolute;
+            bottom: -1.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .ce-arrow { color: var(--text-muted); font-size: 1rem; }
+
+        /* Orthogonality Vectors */
+        .vector-grid {
+            position: relative;
+            width: 200px; height: 200px;
+            border-left: 2px solid var(--text-muted);
+            border-bottom: 2px solid var(--text-muted);
+        }
+        
+        .vec {
+            position: absolute;
+            bottom: 0; left: 0;
+            height: 3px;
+            transform-origin: bottom left;
+            border-radius: 2px;
+        }
+        
+        .vec::after {
+            content: '';
+            position: absolute;
+            right: -4px; top: -3px;
+            width: 0; height: 0;
+            border-left: 6px solid currentColor;
+            border-top: 3px solid transparent;
+            border-bottom: 3px solid transparent;
+        }
+        
+        .vec-1 { width: 140px; background: var(--accent-cyan); color: var(--accent-cyan); transform: rotate(-90deg); }
+        .vec-2 { width: 140px; background: var(--accent-purple); color: var(--accent-purple); transform: rotate(0deg); }
+        .vec-bad { width: 140px; background: var(--accent-error); color: var(--accent-error); transform: rotate(-20deg); opacity: 0.4; }
+        
+        .angle-marker {
+            position: absolute;
+            bottom: 0; left: 0;
+            width: 30px; height: 30px;
+            border: 2px dashed var(--text-muted);
+            border-left: none; border-bottom: none;
+            border-radius: 0 100% 0 0;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .sidebar { display: none; }
+            .main-content { margin-left: 0; padding: 2rem; }
+            h1 { font-size: 2.5rem; }
+        }
+        
+        /* Mermaid overrides */
+        .mermaid {
+            background: transparent !important;
+            display: flex;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-dot"></div>
+            AUDIO<span style="color: var(--text-muted)">LAB</span>
+        </div>
+        <ul class="nav-menu">
+            <li class="nav-item">
+                <a href="#intro" class="nav-link active">
+                    <i class="fas fa-layer-group"></i> Introduction
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#architecture" class="nav-link">
+                    <i class="fas fa-microchip"></i> Architecture
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#math" class="nav-link">
+                    <i class="fas fa-square-root-variable"></i> Mathematics
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#results" class="nav-link">
+                    <i class="fas fa-chart-network"></i> Results
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#code" class="nav-link">
+                    <i class="fas fa-code-branch"></i> Implementation
+                </a>
+            </li>
+            <li class="nav-item">
+                <a href="#uml" class="nav-link">
+                    <i class="fas fa-sitemap"></i> Class Diagram
+                </a>
+            </li>
+        </ul>
+        <div class="sidebar-footer">
+            <span style="color: var(--accent-cyan);">Sparsh Verma</span><br>
+            Roll: 1024240011
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        
+        <header>
+            <div class="doc-meta">
+                <span><i class="far fa-calendar"></i> Nov 2025</span>
+                <span><i class="fas fa-tag"></i> Deep Learning</span>
+            </div>
+            <h1>Audio Source Separation<br>& Classification</h1>
+            <div class="subtitle">A unified end-to-end architecture for solving the cocktail party problem with semantic understanding.</div>
+        </header>
+
+        <!-- Abstract -->
+        <div class="glass-card highlight">
+            <h3 style="margin-top: 0; font-family: 'JetBrains Mono'; font-size: 0.9rem; text-transform: uppercase; color: var(--accent-purple); letter-spacing: 1px;">Abstract</h3>
+            <p style="color: var(--text-primary); font-size: 1.1rem; margin-bottom: 0;">
+                This document details the engineering of a dual-head neural network capable of unmixing overlapping audio signals while simultaneously identifying their semantic classes. Utilizing a <strong>Temporal Convolutional Network (TCN)</strong> backbone and <strong>Permutation Invariant Training (PIT)</strong>, we achieve state-of-the-art results on the ESC-50 dataset. The system demonstrates a peak accuracy of <strong>90%</strong> with an average accuracy of <strong>70%</strong> on 2-source mixtures, validating the efficacy of our mask-based spectral filtering approach.
+            </p>
+        </div>
+
+        <section id="intro">
+            <h2>1. Introduction</h2>
+            <p>The "cocktail party problem"—focusing on a single auditory source in a noisy environment—remains a pinnacle challenge in machine perception. This system transcends traditional separation by integrating a semantic classification head, enabling the system to not just <em>hear</em> sources, but to <em>comprehend</em> them.</p>
+            
+            <h3>1.1 Objectives</h3>
+            <ul>
+                <li><strong>Source Separation:</strong> Decompose single-channel mixtures into 2 distinct audio streams.</li>
+                <li><strong>Semantic Classification:</strong> Categorize each stream into one of 50 environmental classes.</li>
+                <li><strong>Real-time Inference:</strong> Optimized architecture for low-latency deployment.</li>
+            </ul>
+        </section>
+
+        <section id="architecture">
+            <h2>2. System Architecture</h2>
+            <p>The data flows through a modular pipeline: <em>Mixture Input &rarr; TCN Separator &rarr; CNN Classifier &rarr; Output</em>.</p>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Parameter</th>
+                            <th>Value</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Sample Rate</td><td>16,000 Hz</td><td>Wideband speech standard</td></tr>
+                        <tr><td>Duration</td><td>3.0 s</td><td>Fixed context window</td></tr>
+                        <tr><td>Sources (\(S\))</td><td>2</td><td>Max concurrent streams</td></tr>
+                        <tr><td>Classes</td><td>51</td><td>50 ESC-50 + Silence</td></tr>
+                        <tr><td>Params</td><td>~2.5M</td><td>Mid-range GPU optimized</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>2.2 The Separator (Conv-TasNet Variant)</h3>
+            <p>We utilize a fully convolutional time-domain network to bypass phase reconstruction artifacts.</p>
+            <ul>
+                <li><strong>Encoder:</strong> 1D Conv layer maps raw waveform to high-dim latent space.</li>
+                <li><strong>TCN Bottleneck:</strong> Stacked dilated convolutions ($2^0 \dots 2^7$) capture long-range dependencies.</li>
+                <li><strong>Mask Decoder:</strong> Estimates weighting masks $m_i \in [0, 1]$ applied to latent features.</li>
+            </ul>
+        </section>
+
+        <section id="math">
+            <h2>3. Mathematical Framework & Loss Functions</h2>
+            
+            <h3>3.1 Permutation Invariant Training (PIT)</h3>
+            <p>Blind source separation suffers from output ambiguity. PIT resolves this by minimizing loss over the optimal permutation of outputs.</p>
+            
+            <div class="loss-explanation">
+                <h4><i class="fas fa-random"></i> The Ambiguity Problem</h4>
+                <p>When the model outputs 2 separated sources, it lacks inherent ordering (e.g., "Output 1" could be the Dog or the Rain). Naive loss functions punish correct separations if the order is swapped. PIT calculates the loss for <strong>all possible permutations</strong> and picks the minimum.</p>
+                
+                <div class="viz-container">
+                    <div style="text-align: center; color: var(--accent-error);">
+                        <div style="font-family: 'JetBrains Mono'; margin-bottom: 0.5rem;">Permutation 1</div>
+                        <div style="border: 1px solid var(--accent-error); padding: 1rem; border-radius: 0.5rem; opacity: 0.7;">
+                            |Out1 - Src1| + |Out2 - Src2|<br>
+                            = HUGE LOSS
+                        </div>
+                    </div>
+                    
+                    <i class="fas fa-vs" style="font-size: 1.5rem; color: var(--text-muted);"></i>
+                    
+                    <div style="text-align: center; color: var(--accent-success);">
+                        <div style="font-family: 'JetBrains Mono'; margin-bottom: 0.5rem;">Permutation 2</div>
+                        <div style="border: 2px solid var(--accent-success); padding: 1rem; border-radius: 0.5rem; background: rgba(16, 185, 129, 0.1);">
+                            |Out1 - Src2| + |Out2 - Src1|<br>
+                            = MINIMAL LOSS
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="math-block">
+                $$ \mathcal{L}_{PIT} = \min_{\pi \in \mathcal{P}} \sum_{i=1}^{N} \mathcal{L}_{base}(s_i, \hat{s}_{\pi(i)}) $$
+            </div>
+
+            <h3>3.2 Classification Loss (Cross-Entropy)</h3>
+            <p>This metric quantifies the confidence of the semantic classification. We aim to maximize the probability assigned to the true class.</p>
+            
+            <div class="loss-explanation">
+                <h4><i class="fas fa-bullseye"></i> Logic Flow</h4>
+                <div class="viz-container">
+                    <div class="ce-pipeline">
+                        <div class="ce-box" data-label="Raw Scores">Logits<br>[2.0, 0.5, 0.1]</div>
+                        <div class="ce-arrow">&rarr;</div>
+                        <div class="ce-box" style="border-color: var(--accent-cyan);" data-label="Softmax">Probs<br>[0.8, 0.15, 0.05]</div>
+                        <div class="ce-arrow">&rarr;</div>
+                        <div class="ce-box" style="border-color: var(--accent-purple);" data-label="Formula">-log(0.8)</div>
+                        <div class="ce-arrow">=</div>
+                        <div class="ce-box" style="border-color: var(--accent-success);" data-label="Loss">0.22</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="math-block">
+                $$ CE = -\log(probability\_of\_true\_class) $$
+            </div>
+
+            <h3>3.3 Orthogonality Loss</h3>
+            <p>To prevent "Mode Collapse"—where the model outputs the same audio for both channels—we enforce independence. Distinct sources should be orthogonal (zero correlation) in feature space.</p>
+            
+            <div class="loss-explanation">
+                <h4><i class="fas fa-vector-square"></i> Visualizing Independence</h4>
+                <div class="viz-container" style="justify-content: space-around;">
+                    <!-- Good Case -->
+                    <div style="text-align: center;">
+                        <div class="vector-grid">
+                            <div class="vec vec-1"></div>
+                            <div class="vec vec-2"></div>
+                            <div class="angle-marker"></div>
+                        </div>
+                        <div style="font-family: 'JetBrains Mono'; margin-top: 1rem; color: var(--accent-success);">
+                            Cos(90°) = 0<br>(Perfect Separation)
+                        </div>
+                    </div>
+
+                    <!-- Bad Case -->
+                    <div style="text-align: center;">
+                        <div class="vector-grid">
+                            <div class="vec vec-1"></div>
+                            <div class="vec vec-bad"></div>
+                        </div>
+                        <div style="font-family: 'JetBrains Mono'; margin-top: 1rem; color: var(--accent-error);">
+                            Cos(20°) ≈ 0.9<br>(Mode Collapse)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="results">
+            <h2>4. Experimental Results</h2>
+            
+            <h3>4.1 Convergence Dynamics</h3>
+            <p>The model exhibits stable learning, utilizing a <code>ReduceLROnPlateau</code> scheduler to achieve fine-grained optimization.</p>
+
+            <!-- Image 1: Training Plots -->
+            <div class="figure">
+                <div class="img-container">
+                    <img src="image_dae019.png" alt="Training Accuracy Plot">
+                </div>
+                <div class="caption"><strong>Figure 1:</strong> Training Trajectory. Peak validation accuracy of 65.5% achieved. Note the step-wise learning rate annealing.</div>
+            </div>
+
+            <h3>4.2 Qualitative Analysis</h3>
+            <p>Visual inspection confirms the TCN successfully suppresses interfering sources while preserving the target's harmonic structure.</p>
+
+            <!-- Image 2: Spectrograms -->
+            <div class="figure">
+                <div class="img-container">
+                    <img src="image_dadeff.jpg" alt="Spectrogram Separation">
+                </div>
+                <div class="caption"><strong>Figure 2:</strong> Inference Output. Top: Input mixture. Middle/Bottom: Separated streams. Right: Spectral masks (Yellow = Pass, Purple = Suppress).</div>
+            </div>
+        </section>
+
+        <section id="code">
+            <h2>5. Implementation Design</h2>
+            <p>The codebase adheres to strict OOP principles for modularity.</p>
+
+            <pre><code><span class="kw">class</span> <span class="cls">SepClsNet</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, num_sources=2, num_classes=51):
+        <span class="fn">super</span>().__init__()
+        <span class="com"># Composition: The model "HAS-A" Separator and Classifier</span>
+        self.separator = Separator(N=256, num_sources=num_sources)
+        self.classifier = Classifier(num_classes=num_classes)
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, mixture):
+        <span class="com"># 1. Separation Stage</span>
+        sep_audio, masks = self.separator(mixture)
+        
+        <span class="com"># 2. Classification Stage (Reshaped for batch)</span>
+        logits = self.classifier(sep_audio.reshape(-1, ...))
+        
+        <span class="kw">return</span> sep_audio, logits, masks
+
+<span class="kw">class</span> <span class="cls">TCNBlock</span>(nn.Module):
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, channels, kernel_size=3, dilation=1):
+        <span class="fn">super</span>().__init__()
+        self.net = nn.Sequential(
+            nn.Conv1d(..., dilation=dilation),
+            nn.GroupNorm(1, channels),
+            nn.PReLU()
+        )
+
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x):
+        <span class="kw">return</span> self.activation(x + self.net(x)) <span class="com"># Residual connection</span></code></pre>
+        </section>
+
+        <section id="uml">
+            <h2>6. Class Diagram (UML)</h2>
+            <p>The following UML diagram illustrates the composition, inheritance, and loss function structure of the system.</p>
+            
+            <div class="glass-card" style="background: rgba(13, 17, 23, 0.8); padding: 1rem; overflow-x: auto;">
+                <div class="mermaid">
+                    classDiagram
+                    
+                    class MixtureDataset {
+                        +__getitem__(idx)
+                        +__len__()
+                    }
+
+                    class Module {
+                        &lt;&lt;PyTorch Base&gt;&gt;
+                    }
+                    
+                    class SepClsNet {
+                        +Separator separator
+                        +Classifier classifier
+                        +forward(mixture)
+                    }
+                    
+                    class Separator {
+                        +Encoder encoder
+                        +TCNBlock[] tcn
+                        +MaskNet mask_net
+                        +Decoder decoder
+                        +forward(mixture)
+                    }
+                    
+                    class TCNBlock {
+                        +Sequential net
+                        +PReLU activation
+                        +forward(x)
+                    }
+                    
+                    class Classifier {
+                        +MelSpectrogram melspec
+                        +CNN backbone
+                        +Linear head
+                        +forward(waveforms)
+                    }
+
+                    class PITLossWithRegularization {
+                        +CrossEntropy ce
+                        +forward(sep, target, logits, labels)
+                        -_l1_loss()
+                        -_mask_orthogonality_loss()
+                    }
+                    
+                    Module <|-- SepClsNet
+                    Module <|-- Separator
+                    Module <|-- TCNBlock
+                    Module <|-- Classifier
+                    Module <|-- PITLossWithRegularization
+                    
+                    SepClsNet *-- Separator : Composition
+                    SepClsNet *-- Classifier : Composition
+                    Separator *-- TCNBlock : Composition
+                    SepClsNet ..> PITLossWithRegularization : Optimizes
+                    MixtureDataset ..> SepClsNet : Feeds
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+</body>
+</html>
