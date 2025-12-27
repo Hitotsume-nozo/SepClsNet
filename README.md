@@ -1,8 +1,10 @@
 # SepClsNet
 ----
 ## Overview
-```bash
-This consists of dual-head neural network capable of unmixing overlapping audio signals while simultaneously identifying their semantic classes. Utilizing a Temporal Convolutional Network (TCN) backbone and Permutation Invariant Training (PIT), we achieve state-of-the-art results on the ESC-50 dataset. The system demonstrates a peak accuracy of 90% with an average accuracy of 70% on 2-source mixtures, validating the efficacy of our mask-based spectral filtering approach.
+```py
+This consists of dual-head neural network capable of unmixing overlapping audio signals while simultaneously identifying their semantic classes.
+Utilizing a Temporal Convolutional Network (TCN) backbone and Permutation Invariant Training (PIT), we achieve state-of-the-art results on the ESC-50 dataset.
+The system demonstrates an accuracy of 70% on 2-source mixtures, validating the efficacy of our mask-based spectral filtering approach.
 ```
 
 ----
